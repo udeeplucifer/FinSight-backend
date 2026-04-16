@@ -6,6 +6,7 @@ import requests
 import json
 import anthropic
 from dotenv import load_dotenv
+import time
 
 load_dotenv()
 
@@ -20,6 +21,12 @@ app.add_middleware(
 )
 
 claude = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+# Fix 429 rate limit
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+})
 
 def format_market_cap(val):
     if not val:
@@ -93,8 +100,12 @@ def health():
 @app.get("/stock/{ticker}")
 def get_stock(ticker: str):
     try:
-        stock = yf.Ticker(ticker)
-        info = stock.info
+        stock = yf.Ticker(ticker, session=session)
+        try:
+            info = stock.info
+        except:
+            time.sleep(3)
+            info = stock.info
 
         price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
         market_cap = format_market_cap(info.get("marketCap"))
@@ -112,7 +123,7 @@ def get_stock(ticker: str):
         return {
             "ticker": ticker.upper(),
             "name": name,
-            "price": round(price, 2),
+            "price": round(price, 2) if price else 0,
             "market_cap": market_cap,
             "sector": sector,
             "pe_ratio": round(pe_ratio, 2) if pe_ratio else "N/A",
@@ -141,7 +152,7 @@ def get_stock_history(ticker: str, range: str = "1Y"):
             "5Y": ("5y", "1wk"),
         }
         period, interval = range_map.get(range, ("1y", "1d"))
-        stock = yf.Ticker(ticker)
+        stock = yf.Ticker(ticker, session=session)
         hist = stock.history(period=period, interval=interval)
 
         prices = []
@@ -163,11 +174,20 @@ def get_stock_history(ticker: str, range: str = "1Y"):
 @app.get("/compare/{ticker1}/{ticker2}")
 def compare_stocks(ticker1: str, ticker2: str):
     try:
-        stock1 = yf.Ticker(ticker1)
-        stock2 = yf.Ticker(ticker2)
+        stock1 = yf.Ticker(ticker1, session=session)
+        stock2 = yf.Ticker(ticker2, session=session)
 
-        info1 = stock1.info
-        info2 = stock2.info
+        try:
+            info1 = stock1.info
+        except:
+            time.sleep(3)
+            info1 = stock1.info
+
+        try:
+            info2 = stock2.info
+        except:
+            time.sleep(3)
+            info2 = stock2.info
 
         def get_info(info, ticker):
             price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
@@ -212,7 +232,7 @@ def compare_stocks(ticker1: str, ticker2: str):
 @app.post("/chat")
 async def chat(payload: dict = Body(...)):
     try:
-        question = payload.get("question", "")
+        question = payload.get("question", "") or payload.get("message", "")
         context = payload.get("context", "")
 
         message = claude.messages.create(
@@ -226,7 +246,7 @@ Current stock context: {context}
 
 Rules:
 - Explain in simple plain English
-- For beginners avoid jargon use analogies  
+- For beginners avoid jargon use analogies
 - Keep response to 2-3 sentences max
 - Add disclaimer for investment advice
 - Use emojis to keep it friendly
@@ -240,10 +260,4 @@ User question: {question}"""
 
     except Exception as e:
         print(f"❌ Chat Error: {e}")
-        question_lower = question.lower()
-        if any(w in question_lower for w in ["buy", "invest"]):
-            return {"answer": "📊 Always diversify and never invest more than you can afford to lose! ⚠️ This is not financial advice."}
-        elif any(w in question_lower for w in ["beginner", "start"]):
-            return {"answer": "🎓 Start with index funds like NIFTY 50 ETFs — lower risk, great for beginners!"}
-        else:
-            return {"answer": "🤖 Great question! Ask me about any stock, market trends, or investing concepts!"}
+        return {"answer": "🤖 Great question! Ask me about any stock, market trends, or investing concepts!"}
