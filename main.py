@@ -101,15 +101,14 @@ def health():
 def get_stock(ticker: str):
     try:
         stock = yf.Ticker(ticker, session=session)
-        try:
-            info = stock.info
-        except:
-            time.sleep(3)
-            info = stock.info
+        info = stock.info
+
+        if not info or len(info) <= 1:
+            return {"error": f"No data found for ticker '{ticker}'. Try a valid ticker like AAPL, TSLA."}
 
         price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
         market_cap = format_market_cap(info.get("marketCap"))
-        sector = info.get("sector", "N/A")
+        sector = info.get("sector") or "N/A"
         name = info.get("longName") or info.get("shortName") or ticker
         pe_ratio = info.get("trailingPE")
         week_high = info.get("fiftyTwoWeekHigh")
@@ -123,14 +122,14 @@ def get_stock(ticker: str):
         return {
             "ticker": ticker.upper(),
             "name": name,
-            "price": round(price, 2) if price else 0,
+            "price": round(float(price), 2) if price else 0,
             "market_cap": market_cap,
             "sector": sector,
-            "pe_ratio": round(pe_ratio, 2) if pe_ratio else "N/A",
-            "week_high": week_high,
-            "week_low": week_low,
-            "beta": round(beta, 2) if beta else "N/A",
-            "dividend_yield": round(dividend_yield * 100, 2) if dividend_yield else "N/A",
+            "pe_ratio": round(float(pe_ratio), 2) if pe_ratio else "N/A",
+            "week_high": round(float(week_high), 2) if week_high else "N/A",
+            "week_low": round(float(week_low), 2) if week_low else "N/A",
+            "beta": round(float(beta), 2) if beta else "N/A",
+            "dividend_yield": round(float(dividend_yield) * 100, 2) if dividend_yield else "N/A",
             "verdict": ai_result["verdict"],
             "confidence": ai_result["confidence"],
             "summary": ai_result["summary"],
