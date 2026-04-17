@@ -1,12 +1,19 @@
 from fastapi import FastAPI, Body
 from fastapi.middleware.cors import CORSMiddleware
-import yfinance as yf
 import os
 import requests
 import json
 import anthropic
 from dotenv import load_dotenv
 import time
+import yfinance as yf
+yf.set_tz_cache_location("/tmp/yf_cache")
+
+import requests
+session = requests.Session()
+session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+})
 
 load_dotenv()
 
